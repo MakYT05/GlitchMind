@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GlitchMind — профайлер разговоров</title>
+<link rel="stylesheet" href="/static/style.css">
+<script>window.__TOKEN__ = "{{GM_TOKEN}}";</script>
+</head>
+<body>
+<div class="fx-noise"></div>
+<div class="fx-scan"></div>
+
+<div id="consent" class="overlay hidden">
+  <div class="modal panel">
+    <h2>🔒 ПРОТОКОЛ ПРИВАТНОСТИ</h2>
+    <p>GlitchMind слушает микрофон и звук из наушников <b>только пока включена кнопка «СЛУШАТЬ»</b>. Распознавание речи идёт <b>локально на этом компьютере</b>: аудио никуда не отправляется и не сохраняется. Текст реплик уходит наружу только если ты сам подключил <i>облачную</i> ИИ-модель (по умолчанию — локальная Ollama).</p>
+    <p>Запись и расшифровка чужих разговоров во многих странах требует согласия участников. Используй приложение там, где это законно, и предупреждай собеседника.</p>
+    <p class="warn">Блок «несоответствия» — это подсказка, <b>а не детектор лжи</b>: надёжных признаков лжи в голосе и словах не существует. Любой маркер — повод задать уточняющий вопрос, а не обвинить.</p>
+    <label class="check"><input type="checkbox" id="consent-ok"> Понимаю и принимаю</label>
+    <button id="consent-btn" class="btn primary" disabled>ВОЙТИ В СИСТЕМУ</button>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<div id="app">
+  <header class="top">
+    <div class="brand">
+      <span class="glitch" data-text="GLITCHMIND">GLITCHMIND</span>
+      <small>профайлер разговоров <span class="dim">// <span id="ver">v1.0</span></span></small>
+    </div>
+    <div class="chips" id="chips">
+      <span class="chip" id="chip-asr" title="Распознавание речи"><i class="led"></i>ASR</span>
+      <span class="chip" id="chip-llm" title="Языковая модель"><i class="led"></i>ИИ</span>
+      <span class="chip" id="chip-mic" title="Микрофон"><i class="led"></i>МИК</span>
+      <span class="chip" id="chip-loop" title="Звук из наушников"><i class="led"></i>СИС</span>
+      <span class="chip" id="chip-link" title="Связь с ядром"><i class="led"></i>LINK</span>
+    </div>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="icon-btn" id="btn-quit" title="Выйти из приложения">⏻</button>
+  </header>
+
+  <aside class="side">
+    <section class="panel mascot-panel">
+      <div class="panel-title"><span>▌ЯДРО</span><span class="tag" id="mascot-state">ГОТОВ</span></div>
+      <div class="mascot" id="mascot" data-state="idle">
+        <svg class="layer ghost-r" viewBox="0 0 200 200"></svg>
+        <svg class="layer ghost-b" viewBox="0 0 200 200"></svg>
+        <svg class="layer main" viewBox="0 0 200 200"></svg>
+        <svg class="layer slice" viewBox="0 0 200 200"></svg>
+        <img class="skin hidden" id="skin" alt="">
+        <div class="reticle"></div>
+      </div>
+      <div class="mascot-cap"><span id="mascot-emoji">😌</span> <span id="mascot-cap">Жду команды. Нажми «СЛУШАТЬ».</span></div>
+    </section>
+
+    <section class="panel">
+      <button id="btn-listen" class="big-btn"><span class="ring"></span><span id="listen-label">▶ СЛУШАТЬ</span></button>
+      <div class="channels">
+        <label class="chan">
+          <input type="checkbox" id="ch-mic"><span class="sw"></span>
+          <span class="chan-name">🎙 МИКРОФОН<small>твой голос</small></span>
+          <span class="meter"><i id="lv-mic"></i></span>
+        </label>
+        <label class="chan">
+          <input type="checkbox" id="ch-loop"><span class="sw"></span>
+          <span class="chan-name">🎧 НАУШНИКИ<small>звук собеседника</small></span>
+          <span class="meter"><i id="lv-loop"></i></span>
+        </label>
+      </div>
+      <button class="btn ghost small" id="btn-demo">▶ ДЕМО-РАЗГОВОР</button>
+    </section>
+
+    <section class="panel">
+      <div class="panel-title"><span>▌ПРОФИЛЬ ДАВЛЕНИЯ</span></div>
+      <div class="gauge" data-key="pressure"><div class="gauge-h"><span>⏱ ДАВЛЕНИЕ</span><b>0</b></div><div class="seg"></div></div>
+      <div class="gauge" data-key="manip"><div class="gauge-h"><span>🎭 МАНИПУЛЯЦИЯ (FOG)</span><b>0</b></div><div class="seg"></div></div>
+      <div class="gauge" data-key="deception"><div class="gauge-h"><span>🔎 НЕСООТВЕТСТВИЯ</span><b>0</b></div><div class="seg"></div></div>
+      <div class="gauge-note" id="dec-label">это не детектор лжи, а повод уточнить</div>
+    </section>
+  </aside>
+
+  <main class="main">
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="live">📡 LIVE</button>
+      <button class="tab-btn" data-tab="situation">🧩 СИТУАЦИЯ</button>
+      <button class="tab-btn" data-tab="knowledge">📚 ЗНАНИЯ</button>
+      <button class="tab-btn" data-tab="library">🗂 БИБЛИОТЕКА</button>
+      <button class="tab-btn" data-tab="settings">⚙ НАСТРОЙКИ</button>
+    </nav>
+
+    <!-- LIVE -->
+    <section id="tab-live" class="tab active">
+      <div class="live-grid">
+        <div class="panel feed-panel">
+          <div class="panel-title"><span>▌ТРАНСКРИПТ</span>
+            <span class="actions">
+              <button class="btn ghost small" id="btn-advice">⚡ АНАЛИЗ СЕЙЧАС</button>
+              <button class="btn ghost small" id="btn-clear">🗑 ОЧИСТИТЬ</button>
+            </span>
+          </div>
+          <div id="feed" class="feed"><div class="empty" id="feed-empty">
+            <div class="empty-big">⌁ ТИШИНА В ЭФИРЕ</div>
+            Нажми <b>▶ СЛУШАТЬ</b>, и фразы появятся здесь.<br>Нет микрофона под рукой? Запусти <b>ДЕМО-РАЗГОВОР</b> или добавь реплику вручную ниже.
+          </div></div>
+          <form id="manual" class="manual">
+            <select id="manual-who"><option value="them">Собеседник</option><option value="me">Я</option></select>
+            <input id="manual-text" type="text" placeholder="Добавить реплику вручную…" autocomplete="off">
+            <button class="btn small" type="submit">＋</button>
+          </form>
+        </div>
+
+        <div class="panel advice-panel">
+          <div class="panel-title"><span>▌ПОДСКАЗКИ</span><span class="spin hidden" id="adv-spin">🧠 ИИ думает…</span></div>
+          <div class="note-row"><input id="adv-note" type="text" placeholder="Пожелание: например «хочу отказать мягко»" autocomplete="off"></div>
+          <div id="advice" class="advice"><div class="empty">Подсказки появятся после первой реплики собеседника.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- СИТУАЦИЯ -->
+    <section id="tab-situation" class="tab">
+      <div class="live-grid">
+        <div class="panel">
+          <div class="panel-title"><span>▌ОПИШИ СИТУАЦИЮ</span></div>
+          <textarea id="sit-text" rows="12" placeholder="Опиши, что происходит, или вставь переписку/диалог.&#10;&#10;Можно размечать говорящих:&#10;Он: Если ты опять опоздаешь, то я больше не буду с тобой разговаривать.&#10;Я: Мне нужно подумать."></textarea>
+          <input id="sit-note" type="text" placeholder="Что тебе нужно? (например: «отказаться и не поссориться»)" autocomplete="off">
+          <button class="btn primary" id="btn-sit">🧩 РАЗОБРАТЬ</button>
+          <p class="hint">Разбор строится по пяти книгам: приёмы манипуляции, динамика, варианты ответа и вопросы для уточнения.</p>
+        </div>
+        <div class="panel advice-panel">
+          <div class="panel-title"><span>▌РАЗБОР</span><span class="spin hidden" id="sit-spin">🧠 ИИ думает…</span></div>
+          <div id="sit-advice" class="advice"><div class="empty">Здесь появится разбор.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ЗНАНИЯ -->
+    <section id="tab-knowledge" class="tab">
+      <div class="panel">
+        <div class="panel-title"><span>▌ВСТРОЕННЫЕ КОНСПЕКТЫ ПЯТИ КНИГ</span></div>
+        <p class="hint">Это краткие конспекты приёмов <b>моими словами</b>, а не тексты книг. Свои копии книг загрузи во вкладке «Библиотека» — тогда приложение будет подтягивать фрагменты из них.</p>
+        <div id="kb" class="kb-grid"></div>
+      </div>
+    </section>
+
+    <!-- БИБЛИОТЕКА -->
+    <section id="tab-library" class="tab">
+      <div class="panel">
+        <div class="panel-title"><span>▌ТВОИ КНИГИ</span>
+          <span class="actions">
+            <button class="btn ghost small" id="btn-lib-open">📂 ОТКРЫТЬ ПАПКУ</button>
+            <button class="btn ghost small" id="btn-lib-rescan">🔄 ПЕРЕСКАНИРОВАТЬ</button>
+          </span>
+        </div>
+        <p class="hint">Загрузи свои легальные копии книг (txt, fb2, epub, docx, pdf с текстом). Файлы остаются на этом компьютере. Приложение режет их на фрагменты, и в каждый разбор подтягиваются самые подходящие.</p>
+        <div id="drop" class="drop">⬇ Перетащи файлы сюда или <label class="link">выбери<input id="file-any" type="file" multiple accept=".txt,.md,.fb2,.epub,.docx,.pdf,.html,.htm" hidden></label></div>
+        <div id="lib-status" class="lib-status"></div>
+        <div class="search-row">
+          <input id="lib-q" type="text" placeholder="Проверка поиска по книгам: например «как отвечать на чувство вины»" autocomplete="off">
+          <button class="btn small" id="btn-lib-search">ИСКАТЬ</button>
+        </div>
+        <div id="lib-results" class="lib-results"></div>
+      </div>
+    </section>
+
+    <!-- НАСТРОЙКИ -->
+    <section id="tab-settings" class="tab">
+      <div class="settings-grid">
+        <div class="panel">
+          <div class="panel-title"><span>▌ЗВУК</span></div>
+          <label class="field">Микрофон<select data-set="mic_device" id="dev-mic"><option value="">по умолчанию</option></select></label>
+          <label class="field">Устройство вывода (наушники)<select data-set="loop_device" id="dev-loop"><option value="">по умолчанию</option></select></label>
+          <p class="hint" id="dev-hint"></p>
+          <label class="field">Чувствительность определения речи <output id="vad-out">0.5</output>
+            <input type="range" min="0" max="1" step="0.05" data-set="vad_sensitivity"></label>
+          <button class="btn ghost small" id="btn-dev-refresh">🔄 ОБНОВИТЬ СПИСОК УСТРОЙСТВ</button>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title"><span>▌РАСПОЗНАВАНИЕ РЕЧИ</span></div>
+          <label class="field">Модель Whisper
+            <select data-set="asr_model">
+              <option value="tiny">tiny — самая быстрая, грубая</option>
+              <option value="base">base — быстрая</option>
+              <option value="small">small — баланс (рекомендуется)</option>
+              <option value="medium">medium — точнее, нужен мощный ПК</option>
+              <option value="large-v3-turbo">large-v3-turbo — лучшая, нужна видеокарта или время</option>
+            </select></label>
+          <label class="field">Язык речи
+            <select data-set="language"><option value="ru">Русский</option><option value="en">English</option><option value="auto">Автоопределение</option></select></label>
+          <label class="field">Устройство
+            <select data-set="asr_device"><option value="cpu">Процессор (CPU)</option><option value="cuda">Видеокарта NVIDIA (CUDA)</option></select></label>
+          <p class="hint">Первый запуск скачает модель (small ≈ 480 МБ). Дальше всё работает офлайн.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title"><span>▌ИИ-МОДЕЛЬ</span></div>
+          <label class="check"><input type="checkbox" data-set="llm_enabled"> Использовать языковую модель для глубокого разбора</label>
+          <label class="field">Тип сервера
+            <select data-set="llm_provider"><option value="ollama">Ollama (локально)</option><option value="openai">OpenAI-совместимый (LM Studio, OpenRouter…)</option></select></label>
+          <label class="field">Адрес<input type="text" data-set="llm_url" placeholder="http://127.0.0.1:11434"></label>
+          <label class="field">Модель<input type="text" data-set="llm_model" id="llm-model" list="llm-models" placeholder="например qwen2.5:7b"><datalist id="llm-models"></datalist></label>
+          <label class="field">API-ключ (если нужен)<input type="password" data-set="llm_api_key" id="llm-key" placeholder="" autocomplete="off"></label>
+          <label class="field">Температура <output id="temp-out">0.4</output>
+            <input type="range" min="0" max="1.2" step="0.1" data-set="llm_temperature"></label>
+          <label class="field">Фрагментов из книг в разбор<input type="number" min="0" max="8" data-set="rag_top_k"></label>
+          <div class="row">
+            <button class="btn small" id="btn-llm-test">🔌 ПРОВЕРИТЬ СВЯЗЬ</button>
+            <button class="btn ghost small" id="btn-llm-models">📋 СПИСОК МОДЕЛЕЙ</button>
+          </div>
+          <p class="hint" id="llm-msg">Без модели работают быстрые подсказки по правилам.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title"><span>▌ПОВЕДЕНИЕ</span></div>
+          <label class="check"><input type="checkbox" data-set="auto_advice"> Автоматически давать подсказку после реплики собеседника</label>
+          <label class="check"><input type="checkbox" data-set="fx_glitch"> Глитч-эффекты интерфейса</label>
+          <div class="panel-title" style="margin-top:18px"><span>▌О ПРОГРАММЕ</span></div>
+          <p class="hint">Данные хранятся в <code id="data-dir">%APPDATA%\GlitchMind</code>. Логи: <code>logs\app.log</code>.<br>Свой маскот: положи <code>skin.png</code> в папку данных и перезапусти.<br>Блок «несоответствия» — эвристика, а не детектор лжи.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

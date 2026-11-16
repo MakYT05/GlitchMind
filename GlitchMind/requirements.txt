@@ -1,0 +1,5 @@
+numpy>=1.26
+faster-whisper>=1.0.3
+pypdf>=4.0
+pywebview>=5.0
+PyAudioWPatch>=0.2.12.14; sys_platform == "win32"
